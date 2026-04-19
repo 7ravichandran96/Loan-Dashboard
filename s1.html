@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Loan Intelligence</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root { --pri: #1e40af; --int: #d97706; --tax: #dc2626; --bal: #059669; --bg: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; color: #1e293b; overflow-x: hidden; }
+        
+        .app-container { display: flex; min-height: 100vh; position: relative; background: var(--bg); }
+        @media (max-width: 1100px) { .app-container { flex-direction: column; } }
+
+        .sidebar { 
+            width: 380px; background: #fff; padding: 30px; border-right: 1px solid #e2e8f0; 
+            min-height: 100vh; box-sizing: border-box; z-index: 100; flex-shrink: 0;
+        }
+        @media (max-width: 1100px) { .sidebar { width: 100%; min-height: auto; } }
+
+        .group { margin-bottom: 20px; }
+        label { display: block; font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; }
+        input { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 700; outline: none; transition: 0.2s; }
+        input:focus { border-color: var(--pri); box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1); }
+        
+        .rate-flex { display: flex; gap: 30px; margin-bottom: 20px; }
+        .rate-flex .group { flex: 1; }
+
+        .tenure-badge { background: #eff6ff; padding: 10px; border-radius: 8px; font-size: 12px; color: var(--pri); font-weight: 800; text-align: center; margin-bottom: 20px; border: 1px solid #bfdbfe; }
+
+        .slicer-card { background: #f1f5f9; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .chip-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .chip { padding: 8px 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 11px; cursor: pointer; font-weight: 700; transition: 0.2s; color: #64748b; }
+        .chip.active { background: var(--pri) !important; color: white !important; border-color: var(--pri) !important; transform: scale(1.05); }
+
+        .main-content { flex: 1; padding: 40px; box-sizing: border-box; }
+
+        .charts-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: #fff; padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi { background: #fff; padding: 20px; border-radius: 16px; border-left: 5px solid var(--pri); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .kpi b { font-size: 24px; display: block; margin-top: 5px; color: #0f172a; }
+
+        .table-container { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px; background: #f8fafc; font-size: 11px; border-bottom: 2px solid #e2e8f0; color: #64748b; text-transform: uppercase; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; font-weight: 600; }
+        .tfoot { background: #0f172a; color: #fff; }
+
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; color: white; margin-top: 10px; transition: 0.2s; }
+        .btn:hover { filter: brightness(1.1); }
+
+        .lang-switch { display: flex; gap: 5px; margin-bottom: 20px; justify-content: flex-end; }
+        .lang-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 10px; cursor: pointer; font-weight: 700; background: #fff; }
+        .lang-btn.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+    </style>
+</head>
+<body>
+
+<div class="app-container" id="fullAppCapture">
+    <div class="sidebar">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="setLang('en', this)">EN</button>
+            <button class="lang-btn" onclick="setLang('hi', this)">HI</button>
+            <button class="lang-btn" onclick="setLang('ta', this)">TA</button>
+        </div>
+
+        <h2 style="color: var(--pri); margin-bottom: 25px;" data-i18n="config_title">Enter Loan Details</h2>
+        
+        <div class="group"><label data-i18n="lbl_date">First Payment Date</label><input type="date" id="dStart" onchange="run()"></div>
+        <div class="group"><label data-i18n="lbl_p">Principal Amount</label><input type="number" id="p" value="200000" oninput="run()"></div>
+        
+        <div class="rate-flex">
+            <div class="group"><label data-i18n="lbl_rate100">₹/100 Rate</label><input type="number" id="rr" value="1.5" step="0.1" oninput="sR()"></div>
+            <div class="group"><label data-i18n="lbl_rateyr">Yearly %</label><input type="number" id="yr" value="18" step="0.1" oninput="sP()"></div>
+        </div>
+
+        <div class="group"><label data-i18n="lbl_tenure">Tenure (Months)</label><input type="number" id="mCount" value="12" oninput="run()"></div>
+        <div id="tenureBadge" class="tenure-badge">Equivalent: 1 Year 0 Months</div>
+
+        <div class="group"><label data-i18n="lbl_fee">Processing Fees (₹)</label><input type="number" id="procFee" value="5000" oninput="run()"></div>
+        <div class="group"><label data-i18n="lbl_gst">GST on Int (%)</label><input type="number" id="taxR" value="18" oninput="run()"></div>
+
+        <div class="slicer-card">
+            <label data-i18n="lbl_yrslicer">Year Slicer</label><div id="yChips" class="chip-grid"></div>
+            <label style="margin-top:12px" data-i18n="lbl_mthslicer">Month Slicer</label><div id="mChips" class="chip-grid"></div>
+        </div>
+
+        <button class="btn" style="background: #059669;" onclick="exportExcel()" data-i18n="btn_xl">DOWNLOAD EXCEL</button>
+        <button class="btn" style="background: #be123c;" onclick="exportPDF()" data-i18n="btn_pdf">DOWNLOAD PDF</button>
+    </div>
+
+    <div class="main-content">
+        <div style="margin-bottom: 30px;">
+            <h1 id="dynHeader" style="margin:0; font-size: 26px; color: #0f172a;" data-i18n="main_title">Executive Loan Analysis</h1>
+            <p id="netDisburseText" style="color: var(--bal); font-weight: 700; margin-top: 5px;">Calculation ready...</p>
+        </div>
+
+        <div class="charts-top">
+            <div class="card" style="height:320px"><canvas id="paretoChart"></canvas></div>
+            <div class="card" style="height:320px"><canvas id="pieChart"></canvas></div>
+        </div>
+
+        <div class="kpi-row">
+            <div class="kpi"><span data-i18n="kpi_outflow">Cycle Outflow</span><b id="kEmi">₹0</b><small id="breakupText" style="font-size:10px; color:var(--pri); font-weight:700">P+I+T</small></div>
+            <div class="kpi" style="border-left-color: var(--int);"><span data-i18n="kpi_int">Total Interest</span><b id="kInt" style="color:var(--int)">₹0</b></div>
+            <div class="kpi" style="border-left-color: var(--tax);"><span data-i18n="kpi_tax">Total GST Liability</span><b id="kTax" style="color:var(--tax)">₹0</b></div>
+            <div class="kpi" style="border-left-color: #7c3aed;"><span data-i18n="kpi_cost">Cost Intensity</span><b id="kTrue" style="color:#7c3aed">0%</b></div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="padding-left:25px" data-i18n="th_date">Payment Date</th>
+                        <th data-i18n="th_outflow">Outflow</th>
+                        <th data-i18n="th_int">Interest</th>
+                        <th data-i18n="th_tax">GST Tax</th>
+                        <th data-i18n="th_pri">Principal</th>
+                        <th data-i18n="th_bal">Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+                <tfoot class="tfoot">
+                    <tr>
+                        <td style="padding-left:25px"><strong data-i18n="tf_total">AGGREGATE TOTAL</strong></td>
+                        <td id="fOut">₹0</td>
+                        <td id="fInt">₹0</td>
+                        <td id="fTax">₹0</td>
+                        <td id="fPri">₹0</td>
+                        <td data-i18n="tf_done">Loan Completed</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- Translation System ---
+const i18n = {
+    en: {
+        config_title: "Engine Config", lbl_date: "First Payment Date", lbl_p: "Principal Amount", 
+        lbl_rate100: "₹/100 Rate", lbl_rateyr: "Yearly %", lbl_tenure: "Tenure (Months)",
+        lbl_fee: "Processing Fees (₹)", lbl_gst: "GST on Int (%)", lbl_yrslicer: "Year Slicer",
+        lbl_mthslicer: "Month Slicer", btn_xl: "DOWNLOAD EXCEL", btn_pdf: "DOWNLOAD FULL PDF",
+        main_title: "Executive Loan Analysis", kpi_outflow: "Cycle Outflow", kpi_int: "Total Interest",
+        kpi_tax: "Total GST Liability", kpi_cost: "Cost Intensity", th_date: "Payment Date",
+        th_outflow: "Outflow", th_int: "Interest", th_tax: "GST Tax", th_pri: "Principal",
+        th_bal: "Balance", tf_total: "AGGREGATE TOTAL", tf_done: "Loan Completed",
+        net_val: "Net Disbursement Value: ", tenure_eq: "Equivalent: ", all: "All",
+        months: { "Jan": "Jan", "Feb": "Feb", "Mar": "Mar", "Apr": "Apr", "May": "May", "Jun": "Jun", "Jul": "Jul", "Aug": "Aug", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov", "Dec": "Dec" }
+    },
+    hi: {
+        config_title: "ऋण विवरण दर्ज करें", lbl_date: "प्रथम भुगतान तिथि", lbl_p: "मूल राशि", 
+        lbl_rate100: "₹/100 दर", lbl_rateyr: "वार्षिक %", lbl_tenure: "अवधि (महीने)",
+        lbl_fee: "प्रोसेसिंग शुल्क (₹)", lbl_gst: "ब्याज पर GST (%)", lbl_yrslicer: "वर्ष स्लाइसर",
+        lbl_mthslicer: "माह स्लाइसर", btn_xl: "एक्सेल डाउनलोड", btn_pdf: "पीडीएफ डाउनलोड",
+        main_title: "ऋण विश्लेषण", kpi_outflow: "कुल भुगतान", kpi_int: "कुल ब्याज",
+        kpi_tax: "कुल GST", kpi_cost: "लागत प्रतिशत", th_date: "तिथि",
+        th_outflow: "भुगतान", th_int: "ब्याज", th_tax: "GST टैक्स", th_pri: "मूलधन",
+        th_bal: "शेष", tf_total: "कुल योग", tf_done: "ऋण पूर्ण",
+        net_val: "शुद्ध संवितरण मूल्य: ", tenure_eq: "समतुल्य: ", all: "सभी",
+        months: { "Jan": "जन", "Feb": "फर", "Mar": "मार्च", "Apr": "अप्रैल", "May": "मई", "Jun": "जून", "Jul": "जुलाई", "Aug": "अगस्त", "Sep": "सितंबर", "Oct": "अक्टूबर", "Nov": "नवंबर", "Dec": "दिसंबर" }
+    },
+    ta: {
+        config_title: "கடன் விவரங்களை உள்ளிடவும்", lbl_date: "முதல் கட்டண தேதி", lbl_p: "அசல் தொகை", 
+        lbl_rate100: "₹/100 வட்டி", lbl_rateyr: "ஆண்டு %", lbl_tenure: "காலம் (மாதங்கள்)",
+        lbl_fee: "செயலாக்க கட்டணம் (₹)", lbl_gst: "வட்டி மீதான GST (%)", lbl_yrslicer: "ஆண்டு தேர்வு",
+        lbl_mthslicer: "மாத தேர்வு", btn_xl: "எக்செல் டவுன்லோட்", btn_pdf: "PDF டவுன்லோட்",
+        main_title: "கடன் பகுப்பாய்வு", kpi_outflow: "மாதாந்திர செலவு", kpi_int: "மொத்த வட்டி",
+        kpi_tax: "மொத்த GST வரி", kpi_cost: "செலவு விகிதம்", th_date: "தேதி",
+        th_outflow: "செலவு", th_int: "வட்டி", th_tax: "GST வரி", th_pri: "அசல்",
+        th_bal: "மீதி", tf_total: "மொத்தம்", tf_done: "கடன் முடிந்தது",
+        net_val: "நிகர மதிப்பு: ", tenure_eq: "கால அளவு: ", all: "அனைத்தும்",
+        months: { "Jan": "ஜன", "Feb": "பிப்", "Mar": "மார்", "Apr": "ஏப்", "May": "மே", "Jun": "ஜூன்", "Jul": "ஜூலை", "Aug": "ஆக", "Sep": "செப்", "Oct": "அக்", "Nov": "நவ", "Dec": "டிச" }
+    }
+};
+
+let currentLang = 'en';
+
+function setLang(lang, btn) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.innerText = i18n[lang][key];
+    });
+    run(); 
+}
+
+let charts = {}, rawData = [], selY = 'All', selM = 'All';
+document.getElementById('dStart').valueAsDate = new Date();
+
+function sR() { document.getElementById('yr').value = (document.getElementById('rr').value * 12).toFixed(2); run(); }
+function sP() { document.getElementById('rr').value = (document.getElementById('yr').value / 12).toFixed(2); run(); }
+
+function run() {
+    const P = parseFloat(document.getElementById('p').value) || 0;
+    const r = (parseFloat(document.getElementById('yr').value) / 100) / 12;
+    const tr = parseFloat(document.getElementById('taxR').value) / 100;
+    const mCount = parseInt(document.getElementById('mCount').value) || 1;
+    const fee = parseFloat(document.getElementById('procFee').value) || 0;
+    const start = new Date(document.getElementById('dStart').value);
+
+    const yy = Math.floor(mCount / 12); const mm = mCount % 12;
+    document.getElementById('tenureBadge').innerText = `${i18n[currentLang].tenure_eq} ${yy} Y, ${mm} M`;
+    document.getElementById('netDisburseText').innerText = `${i18n[currentLang].net_val} ₹${(P - fee).toLocaleString('en-IN')}`;
+
+    const baseEMI = P * r * Math.pow(1+r, mCount) / (Math.pow(1+r, mCount) - 1);
+    let bal = P; rawData = [];
+    let yrsSet = new Set(), mthsSet = new Set();
+
+    for(let i=0; i<mCount; i++) {
+        let mInt = bal * r, mTax = mInt * tr, mPri = baseEMI - mInt;
+        let d = new Date(start.getFullYear(), start.getMonth() + i, start.getDate());
+        let yS = d.getFullYear().toString(), mKey = d.toLocaleString('en-US', { month: 'short' });
+        
+        yrsSet.add(yS); mthsSet.add(mKey);
+        bal -= mPri;
+
+        rawData.push({
+            label: `${i18n[currentLang].months[mKey]} ${yS}`, 
+            year: yS, monthKey: mKey,
+            emi: mPri + mInt + mTax, int: mInt, tax: mTax, pri: mPri, bal: Math.max(0, bal),
+            xlDate: new Date(d.getFullYear(), d.getMonth(), d.getDate())
+        });
+    }
+    updateSlicers(Array.from(yrsSet).sort(), Array.from(mthsSet));
+    render();
+}
+
+function updateSlicers(yrs, mths) {
+    const yc = document.getElementById('yChips'), mc = document.getElementById('mChips');
+    const order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    // Year Slicer
+    yc.innerHTML = `<div class="chip ${selY==='All'?'active':''}" onclick="setF('Y','All')">${i18n[currentLang].all}</div>`;
+    yrs.forEach(y => { yc.innerHTML += `<div class="chip ${selY===y?'active':''}" onclick="setF('Y','${y}')">${y}</div>`; });
+    
+    // Month Slicer (Translated)
+    mc.innerHTML = `<div class="chip ${selM==='All'?'active':''}" onclick="setF('M','All')">${i18n[currentLang].all}</div>`;
+    mths.sort((a,b) => order.indexOf(a) - order.indexOf(b)).forEach(mKey => {
+        mc.innerHTML += `<div class="chip ${selM===mKey?'active':''}" onclick="setF('M','${mKey}')">${i18n[currentLang].months[mKey]}</div>`;
+    });
+}
+
+function setF(t, v) { 
+    if(t==='Y') selY = v; else selM = v; 
+    render(); 
+    const yrsSet = new Set(rawData.map(d => d.year));
+    const mthsSet = new Set(rawData.map(d => d.monthKey));
+    updateSlicers(Array.from(yrsSet).sort(), Array.from(mthsSet));
+}
+
+function render() {
+    const filt = rawData.filter(d => (selY==='All' || d.year===selY) && (selM==='All' || d.monthKey===selM));
+    let html = "", tI = 0, tT = 0, tP = 0, tOut = 0, lbs = [], iD = [], cV = [], cI = 0;
+    filt.forEach(d => {
+        tI += d.int; tT += d.tax; tP += d.pri; tOut += d.emi; cI += d.int;
+        lbs.push(d.label); iD.push(d.int); cV.push(cI);
+        html += `<tr><td style="padding-left:25px">${d.label}</td><td>₹${d.emi.toLocaleString('en-IN',{maximumFractionDigits:0})}</td><td>₹${d.int.toFixed(0)}</td><td>₹${d.tax.toFixed(0)}</td><td>₹${d.pri.toFixed(0)}</td><td>₹${d.bal.toFixed(0)}</td></tr>`;
+    });
+    document.getElementById('tbody').innerHTML = html;
+    const top = filt[0] || { emi:0, pri:0, int:0, tax:0 };
+    document.getElementById('kEmi').innerText = "₹" + top.emi.toLocaleString('en-IN',{maximumFractionDigits:0});
+    document.getElementById('breakupText').innerText = `Breakup: ₹${top.pri.toFixed(0)}P + ₹${top.int.toFixed(0)}I + ₹${top.tax.toFixed(0)}T`;
+    document.getElementById('kInt').innerText = "₹" + tI.toLocaleString('en-IN',{maximumFractionDigits:0});
+    document.getElementById('kTax').innerText = "₹" + tT.toLocaleString('en-IN',{maximumFractionDigits:0});
+    const cost = tI + tT + (parseFloat(document.getElementById('procFee').value)||0);
+    document.getElementById('kTrue').innerText = ((cost/parseFloat(document.getElementById('p').value))*100).toFixed(1) + "%";
+    document.getElementById('fOut').innerText = "₹" + tOut.toLocaleString('en-IN',{maximumFractionDigits:0});
+    document.getElementById('fInt').innerText = "₹" + tI.toLocaleString('en-IN',{maximumFractionDigits:0});
+    document.getElementById('fTax').innerText = "₹" + tT.toLocaleString('en-IN',{maximumFractionDigits:0});
+    document.getElementById('fPri').innerText = "₹" + tP.toLocaleString('en-IN',{maximumFractionDigits:0});
+    updateCharts(lbs, iD, cV, tP, tI, tT);
+}
+
+function updateCharts(lbs, i, cv, tp, ti, tt) {
+    Object.values(charts).forEach(c => c && c.destroy());
+    charts.pareto = new Chart(document.getElementById('paretoChart'), { type:'bar', data: { labels:lbs, datasets:[{label:'Interest', data:i, backgroundColor:'#d97706'},{label:'Cumulative', data:cv, type:'line', borderColor:'#1e40af', yAxisID:'y1'}] }, options:{maintainAspectRatio:false} });
+    charts.pie = new Chart(document.getElementById('pieChart'), { type:'doughnut', data: { labels:['Principal','Interest','Tax'], datasets:[{data:[tp,ti,tt], backgroundColor:['#1e40af','#d97706','#dc2626']}] }, options:{maintainAspectRatio:false, cutout:'70%'} });
+}
+
+function exportExcel() {
+    const schedule = rawData.map(d => {
+        let obj = {};
+        obj[i18n[currentLang].th_date] = d.xlDate;
+        obj[i18n[currentLang].th_outflow] = Math.round(d.emi);
+        obj[i18n[currentLang].th_int] = Math.round(d.int);
+        obj[i18n[currentLang].th_tax] = Math.round(d.tax);
+        obj[i18n[currentLang].th_pri] = Math.round(d.pri);
+        obj[i18n[currentLang].th_bal] = Math.round(d.bal);
+        return obj;
+    });
+    const ws = XLSX.utils.json_to_sheet(schedule, { cellDates: true, dateNF: 'dd-mmm-yyyy' });
+    ws['!cols'] = [{wch:18}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:18}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, `Loan_Report_${currentLang}.xlsx`);
+}
+
+async function exportPDF() {
+    const element = document.getElementById('fullAppCapture');
+    const originalHeight = element.style.height;
+    const originalOverflow = element.style.overflow;
+    element.style.height = 'auto';
+    element.style.overflow = 'visible';
+    try {
+        const canvas = await html2canvas(element, { 
+            scale: 2, useCORS: true, logging: false, backgroundColor: "#f8fafc",
+            width: element.scrollWidth, height: element.scrollHeight,
+            windowWidth: element.scrollWidth, windowHeight: element.scrollHeight
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Full_Dashboard_${currentLang}.pdf`);
+    } catch (e) {
+        console.error("PDF Export failed", e);
+    } finally {
+        element.style.height = originalHeight;
+        element.style.overflow = originalOverflow;
+    }
+}
+
+run();
+</script>
+</body>
+</html>
