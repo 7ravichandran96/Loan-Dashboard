@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loan Dashboard</title>
+    <title>Enterprise Loan Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -304,7 +304,7 @@ function exportExcel() {
     const ws = XLSX.utils.json_to_sheet(schedule, { cellDates: true, dateNF: 'dd-mmm-yyyy' });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
-    XLSX.writeFile(wb, `Loan_Report.xlsx`);
+    XLSX.writeFile(wb, `Excel Report.xlsx`);
 }
 
 async function exportPDF() {
@@ -318,7 +318,7 @@ async function exportPDF() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Full_Dashboard.pdf`);
+        pdf.save(`PDF Report.pdf`);
     } catch (e) {
         console.error("PDF Export failed", e);
     } finally {
